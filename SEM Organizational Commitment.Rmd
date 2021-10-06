@@ -1,0 +1,286 @@
+---
+title: "Struqtural Equation Model With R, An Introductory using Lavaan"
+author: "Muhamad Risman"
+date: "`r format(Sys.Date(), '%B %e, %Y')`"
+output:
+  word_document:
+    toc: yes
+  html_document:
+    code_folding: hide
+    df_print: paged
+    highlight: tango
+    theme: cosmo
+    toc: yes
+    toc_float:
+      collapsed: no
+    number_sections: yes
+    always_allow_html: yes
+  pdf_document:
+    toc: yes
+---
+
+<style>
+body{
+text-align: justify}
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## What is a Structural Equation Model?
+
+The structural Equation Model, often abbreviated as SEM, is a statistical tool widely used in social science. SEM is similar to regression analysis, where it tries to explore the relationship between the predictor and target variables. Another functionality of SEM is to confirm if a previous model developed with theoretical adjustment can be adjusted with new data. With SEM, we can also explore descriptive analysis like in the factor analysis. Some examples of projects involving SEM techniques are brand equity analysis. Researchers try to understand the relationship between different variables affecting brand equity (for example, brand awareness or brand loyalty) and impulse buying behavior with how shopping lifestyle or fashion involvement affects the purchasing behavior.
+
+## The Key Concepts of SEM
+
+### Manifest Variable and Latent Variable
+
+To use SEM, we need to know a few terminologies involved throughout the analysis. First, there are two types of variables in SEM. They are manifest variables and latent variables. The manifest variable is a numeric variable representing a matter, while the latent variable is an indirect variable measured in the manifest variable. Since the latent variable represents its manifest variable, the latent variable has a causal relationship with respective manifest variables. To use SEM with R, we need a package called lavaan. In lavaan, manifest variables are represented using squares, while latent variables are represented using a circle.
+
+To understand these variables, think of logical-mathematical intelligence, one of 8 multiple intelligence theories developed by Howard Gardner. Logical-mathematical intelligence is the ability to work with reasoning, analyze logical patterns, and think conceptually about numbers and relationships. Here, logical Mathematical intelligence is a latent variable since we cannot directly measure a logical-mathematical intelligence of a person. To measure this intelligence, we need instruments such as whether the person can recognize patterns strongly, draw the relationship between variables, and deal with numbers firmly. Those instruments are manifest variables since we can directly measure intelligence. Another example of a latent and manifest variable is a measurement to conclude a satisfactory level of a consumer for a delivery shipping. We want to know whether a consumer is satisfied with the delivery shipment of one company. To do this, we need several constructed variables such as how long the shipment is processed, counted daily, the hospitality of the courier, and the service of the call center. A consumer’s satisfactory level is a latent variable, and the variables declared affecting the satisfactory level are manifest variables.
+
+Another example of latent variables is organizational Commitment. Organizational Commitment is the employee’s loyalty to the company that employs them, marked by a strong desire to provide the best performance while showing that they want to maintain their status as employees. Several factors measure this variable, and a few of them are visionary Leadership (VL) and work-life balance (WLB). The research about the relationship between organizational Commitment and its confounding factor has been conducted by Kesumayani et al. (2020) with the research named Boosting Organizational Commitment Through Visionary Leadership and Work-Life Balance. The research will try to confirm how latent variables for Organizational Commitment are affected by confounding variables. To see the significant result of one variable to others, we can use regression analysis. However, since Organizational Commitment and each latent variable cannot be directly measured, we need SEM to analyze this problem. This article will try to recreate the SEM model described in the paper using the package of lavaan in R. The dataset will also come from that research, except the number of observations have been reduced; hence the final result of the model will not be the same with the research written in the paper.
+
+Other essential terms in SEM are exogenous and endogenous latent variables. An exogenous latent variable predicts the target predictor while the target predictor itself becomes an endogenous variable.
+
+
+### Library Setup
+
+```{r warning=FALSE, message=FALSE}
+library(lavaan)
+library(semPlot)
+library(OpenMx)
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+library(GGally)
+library(ggcorrplot)
+
+```
+
+SEM can be used for modeling observe variables or latent variables; this will depend on our analysis needs. The process of making SEM models using observed variables or latent variables is also different, and the diagrams that will be generated will also, of course, be different.
+
+## Path Diagram
+
+SEM works based on the covariance value between variables. It will see the relationship between the variables to determine the effect on the target variable predicted later. The relationship between variables formed by the SEM model equation can be illustrated with a path diagram. In the path diagram, five principal components need to be recognized. Namely, circles represent latent variables, squares represent observed indicators, triangles represent intercepts or means, one-way arrows represent paths, and two-way arrows represent variances or covariances.
+
+
+# Important SEM notation
+
+In making the SEM model using the `lavaan` package, we need to know in advance the formula for forming the model to be used:
+
+* `~` **predict**, used for regression of observed outcome to observed predictors,  y ~ x
+* `=~` **indicator**, used for latent variable to observed indicator in factor analysis measurement models, latent =~ q + r + s
+* `~~` **covariance**, x ~~ x
+* `~1` **intercept** or mean,  x ~ 1 estimates the mean of variable x
+* `1*` **fixes parameter**, latent =~ 1*q
+* `NA*` **frees parameter**, useful to override default marker method,, latent =~ NA*q
+* `a*` labels the **parameter** ‘a’, used for model constraints, latent =~ a*q
+
+As we know, the model formulas of simple linear regression commonly define as
+
+$$y_1 = \beta_0 + \beta_1 x_1 + \epsilon_1$$
+
+in SEM model we have a special notation fork exact the model formula:
+
+$$y_1 = \alpha + \gamma x_1 + \zeta_1$$
+
+when, 
+
+* $x_1$: single independent variable
+* $y_1$: single dependent variable
+* $\beta_0, \alpha_1$: intercept
+* $$
+
+---
+
+# Data Description
+
+Here, we will first load the data for our analysis into our environtment as below:
+
+```{r}
+library(readxl)
+wlb <- read_excel("data_sem.xlsx")
+
+glimpse(wlb)
+```
+
+The dataset consists of 300 observations with nine columns. Each latent variable is measured with three variable instruments. Visionary Leadership is built with three items, namely VL1, VL2, and VL3. Work-life balance is measured with three variable instruments WLB1, WLB2, and WLB3. At the same time, Organizational Commitment is also measured by three items, namely OC1, OC2, and OC3. The dataset consists of 5 levels Likert scale, with one strongly disagreed until five strongly agreed with the measurement item.
+
+# Building SEM Model
+
+## Build The Model Based on Theory
+
+The first step to build Structural Equation Model is defining the theoretical hypothesis based on prior research. For this research, there are four hypotheses to be included in the model:
+
+1. Visionary Leadership (VL) significantly affects the variable of Organizational Commitment (OC).
+2. Visionary Leadership has a significant effect on Work-Life Balance (WLB).
+3. Work-Life Balance has a significant effect on Organizational Commitment (OC).
+
+Another strong point of the analysis of SEM is that SEM can be conducted to see the indirect effect for a variable. For this research, the last hypothesis says that there is a significant relationship between Visionary Leadership (VL) to Organizational Commitment (OC) through Work-Life Balance.
+
+All hypotheses can be visualized in the picture below:
+
+![](wlb.jpg)
+
+The bold lines above show the relationship effect between endogenous and exogenous variables. For example, in the third hypothesis, work-life balance is an exogenous variable as it acts as the predictor variable for organizational Commitment, here it acts as an endogenous variable. At the same time, the broken line indicates the indirect effect of visionary Leadership on Organizational Commitment through work-life balance.
+
+## Confirmatory Factor Analysis
+
+After conducting the theoretical model, we validate the manifest variables to the latent variable with confirmatory factor analysis. This first step is essential as the earlier detection of validity of each manifested variable. The output of this step is the loading factor for each manifest variable to the latent variables. If the value is more significant than 0.7, the manifest variable is valid, while the value between 0.5 - 0.7 is acceptable for exploratory research.
+
+```{r}
+model.wlb <- 'VL =~ VL1 + VL2 + VL3
+             WLB =~ WLB1 + WLB2 + WLB3
+             OC =~ OC1 + OC2 + OC3'
+
+model.cfa <- cfa(model.wlb, data = wlb, std.lv=TRUE)
+
+summary(model.cfa, fit.measures=TRUE, standardized = T)
+
+```
+
+
+Another aspect that needs to be seen is the reliability score. Good reliability score indicates the manifested variables have consistency measuring each respective latent variable.
+
+```{r message=FALSE, warning=FALSE}
+library(semTools)
+
+reliability(model.cfa)
+```
+
+To see the reliability score, we can confirm from the alpha. Alpha is from Cronbach Alpha score, measuring the reliability of survey instrument.
+
+From the result above, we can conclude that the instrument used in the research is good, with an alpha of more than 0.6 for each latent variable. A reliability score is essential to see the power of the instrument measuring each latent variable with base line score 0.6 (Malhotra and Birks 2005).
+
+Loading factor for each manifested variable is given under the Std.lv, and it shows how strong each manifested variable is describing their respective latent variable. From the summary above, we can see that all manifested variables are more than 0.6 and significant at 0.05. If there is an indicator below 0.6, we should eliminate the variable from the model and re-calculate the model. The reliability score is also good since all reliability scores are above 0.7.
+
+Another technique to see each loading factor is by using the semPaths function. With semPaths, we can see the loading factor with a diagram and its standardized loading factor.
+
+```{r}
+semPaths(model.cfa, "std", style = "Lisrel")
+```
+
+
+The parameter std will display the standardized parameter estimates, and Lisrel is the style of the diagram. We can also replace Lisrel with ram, mx, or OpenMx.
+
+
+## Model Identification
+
+Model identification is to check the solution of the parameter that needs to be estimated. This identification is made by using the t-rule with the following formula:
+
+$$\frac {(p + q)(p+q+1)} {2}$$
+
+while p is the number of manifested variables in endogenous latent variable and q is the number of manifested variables in an exogenous latent variable.
+
+The value of this item should be greater than the number of estimated parameters. By the result above, we can see the number of model parameters is 21; hence the degree of freedom is 24
+
+```{r}
+9*(9+1)/2 - 21
+```
+
+The desired degree of freedom in SEM should be greater than 0, which indicates an over-identified model.
+
+## Structural Equation Model
+
+After the vailidity of each manifested variable has been confirmed, we proceed to the SEM. Since there are indirect effect of one latent variable to other latent variable, we need to specify the indirect effect of the model specification.
+
+
+```{r}
+model.spe <- 'VL =~ VL1 + VL2 + VL3
+             WLB =~ WLB1 + WLB2 + WLB3
+             OC =~ OC1 + OC2 + OC3
+             WLB ~ p2*VL
+             OC ~ p3*WLB
+             OC ~ p1*VL
+             indirect := p2*p3'
+```
+
+The * above will declare the indirect effect of each hypothesis. For example, the notation of p2 and p3 is the declaration of indirect effect to the visionary leadership variable through organizational Commitment dan work-life balance. p2 or p3 is free notation as long as it is different from each other. Users can rename the notation with another alphabet.
+
+```{r}
+model.wlb <- sem(model.spe, data = wlb)
+
+summary(model.wlb, fit.measures = T, standardized = T, rsq = T)
+```
+
+We can also visualize the model above with the `semPaths` function. Here, we see two types of diagrams. The first one has been presented earlier in confirmatory factor analysis, while the second has some modifications. The parameter `paths` will tell semPaths to create the model as an unweighted network (gray edges by default), while the stand will tell `semPaths` to create the standardized parameter estimates.
+
+```{r}
+semPaths(model.wlb, "std", style = "Lisrel")
+
+semPaths(model.wlb,what="paths", whatLabels="stand",
+         color = list(lat = rgb(245, 253, 118, maxColorValue = 255), 
+                      man = rgb(155, 253, 175, maxColorValue = 255)), mar = c(10, 5, 10, 5))
+```
+
+
+Visionary Leadership has a significant positive effect on Work-Life Balance with a coefficient of 0.8 and p-value < 0.05. The variable of Work-Life Balance has a significant effect on Organizational Commitment with a coefficient of 0.625 and p-value of 0.05. Another piece of information we have is the significant positive effect on Organizational Commitment from Visionary Leadership with the coefficient of 0.188. Since we have declared the indirect effect between Organizational Commitment and Visionary Leadership with the mediation variable Work-Life Balance, we need to clarify the effect by seeing the coefficient produced from the model. Here, we have the indirect coefficient by 0.5 and significant variable by investigating p-value is lower than 0.05.
+
+VAF is an abbreviation of Variance Accounted For, and it shows how strong the mediation effect is. If the score is more than 0.8, it means the model has a full mediation effect. Full mediation effect is the condition where the model is only significant in an indirect relationship. If the score is between 0.2 and 0.8, it is an indication of partial effect. The partial effect is the condition where both indirect and direct relationships of the variables are significant. The partial effect has two types of mediation. The first is complimentary mediation, where both direct and indirect relationship coefficients have the same direction coefficient (For example, both coefficients are negative or positive). The second mediation is competitive mediation, where the direction of the coefficient are against each other (one variable is positive while the second one is negative).
+
+We will see the VAF score by dividing the indirect coefficient with the direct coefficient effect.
+
+```{r}
+0.5/(0.5+0.188)
+```
+The VAF score above is more significant than 0.2 but lower than 0.8. It means the model has a partial mediation effect. Since both coefficients are positive, the type of mediation is complementary mediation.
+
+
+## The Goodness-of-Fit of The Model Test
+
+
+The structural equation model involves the relationship between independent and latent variables. To evaluate the quality of the model, we need to see the goodness of fit of the model.
+
+The parameter of the goodness-of-fit can be seen with the parameter as follow:
+
+![](gof.jpg)
+
+
+From the critical value above, we can conclude the quality of the model. RMSEA is 0.06, below 0.08, CFI and TLI are more significant than 0.09, while SRMR is 0.018, lower than 0.08. All of these criteria show that the model has a good criterion of fitness.
+
+
+## Hypothesis analysis
+
+Since we have tested the quality of the model, we can evaluate the hypothesis declared in the first scenario.
+
+### Visionary Leaadership to Organizational Commitment
+
+Visionary Leadership has positive coefficient by 0.188 with p-value < 0.05. It means the increase of Visionary Leadership will increase the Organizational Commitment by 0.188. The model supports the hypothesis that this exogenous latent variable supports the endogenous latent variable with a significant effect.
+
+### Visionary Leadership to Work-Life Balance
+
+Visionary Leadership has a significant positive effect by 0.8 on Work-Life Balance with a p-value < 0.05. It supports the hypothesis presented in the earlier segment that Visionary Leadership agrees with the increases of Work-Life Balance with significant effect.
+
+### Work-Life Balance to Organizational Commitment
+
+Work-Life Balance has a positive coefficient of 0.625 with a p-value < 0.05 for Organizational Commitment. The model supports the hypothesis that Work-Life Balance has a significant effect on Organizational Commitment, and the increase of Work-Life Balance will positively increase Organizational Commitment.
+
+### Visionary Leadership to Organizational Commitment through Work-Life Balance
+
+Using SEM, we can also explore how one latent variable will affect another latent variable through the mediator variable. In this research, we can see that the model agrees that Visionary Leadership will increase Organizational Commitment through Work-Life Balance. However, the VAF we have shows that the relationship with the mediation variable is partial. A partial effect in an indirect relationship will significantly affect both the direct and indirect relationship. At the same time, the full effect is the type of mediation where the endogenous variable will only have an effect from its exogenous variable through the mediation variable.
+
+## Conclusion
+
+SEM is the type of statistical tool that mainly confirms theoretical information declared in prior research. To do this, several steps have been conducted to assess the theoretical concept of the research. In this research, we investigate whether Organizational Commitment is affected by Work-Life Balance and Visionary Leadership. By the investigation above, we see that the variable will significantly affect the Organizational Commitment. This research supports prior research conducted earlier; for example, Kas Dhammika (2016) had experienced a study to determine if Organizational Commitment was affected by Visionary Leadership with mediated variable Work-Life Balance.
+
+For the researcher, the finding of this investigation will strengthen the theory that Organizational Commitment is affected by Visionary Leadership and Work-Life Balance as we have confirmed this model, and this model has been validated from earlier research conducted the research. The further model will also develop from this research as an excellent basic foundation of the improved model.
+
+## Sugestion
+
+The theoretical model has been strongly confirmed with SEM by the research above. The researcher can also improve the model by adding another latent variable with supported research. The researcher can also try to apply the model with different types of people from different societies.
+
+
+## Reference
+
+* Dhammika, K. 2016. Visionary leadership and organizational commitment: the mediating effect of leader member exchange (LMX). Wayamba Journal of Management, 4(1), 1–10.
+
+* Kesumayani H, Eliyana A, Hamidah , Akbar M, Sebayang KD. Boosting Organizational Commitment Through Visionary Leadership and Work Life Balance. SRP. 2020; 11(9): 312-322. doi:10.31838/srp.2020.9.48
+
+* Gozali I. 2021. Covariance Based Structural Equation Model (CBSEM) Aplikasi dengan Program Lavaan dan Websem Online. Semarang(ID): Yoga Pratama. 
+
+* Malhotra NK, Birks DF. 2005. Marketing Research:An Applied Approach,2nd 
+edition.Harlow(UK):Pearson Education.
+
+
